@@ -22,10 +22,11 @@ from ..modules.nlf.estimate import load_nlf
 from ..modules.multihmr.estimate import load_multihmr
 from ..modules.wilor.estimate import load_wilor
 from ..modules.smirk.estimate import load_smirk
+from ..modules.multihmr2.estimate import load_multihmr2
 from ..modules.smplx_fit.model import resolve_device, DEFAULT_SMPLX_PARENT, _resolve_model_parent
 
 # Register model folders (ComfyUI convention) so weights live under models/<key>/.
-for _k in ("smplx", "nlf", "multihmr", "wilor", "smirk"):
+for _k in ("smplx", "nlf", "multihmr", "multihmr2", "wilor", "smirk"):
     try:
         _d = os.path.join(folder_paths.models_dir, _k)
         os.makedirs(_d, exist_ok=True)
@@ -261,6 +262,39 @@ class LoadMultiHMR:
             net, img_size = load_multihmr(ckpt, parent, dev)
             return ({"model": net, "img_size": img_size, "smplx_parent": parent,
                      "gender": gender, "device": dev},)
+        return _oom_fallback(resolve_device(device), _do)
+
+
+class LoadMultiHMR2:
+    """Load Multi-HMR2 (Anny-based). The official checkpoint auto-downloads from
+    download.europe.naverlabs.com on first use if missing (no HF repo)."""
+
+    FILENAME = "multihmr2.pt"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {
+            "model_path": ("STRING", {"default": _local_dir("multihmr2"),
+                                      "tooltip": "Folder holding multihmr2.pt. If the file "
+                                                 "is missing it is downloaded automatically "
+                                                 "from Naver (needs wget + internet)."}),
+            "smplx_model": ("SMPLX_MODEL",),
+            "device": (_DEVICES, {"default": "auto"}),
+        }}
+
+    RETURN_TYPES = ("MULTIHMR2_MODEL",)
+    RETURN_NAMES = ("model",)
+    FUNCTION = "load"
+    CATEGORY = "SMPLx Estimator/loaders"
+
+    def load(self, model_path, smplx_model, device):
+        p = os.path.expanduser((model_path or "").strip()) or _local_dir("multihmr2")
+        ckpt = os.path.join(p, self.FILENAME) if not p.endswith(".pt") else p
+
+        def _do(dev):
+            bundle = load_multihmr2(ckpt, dev)
+            return ({"bundle": bundle, "smplx_parent": smplx_model["model_path"],
+                     "gender": smplx_model["gender"], "device": dev},)
         return _oom_fallback(resolve_device(device), _do)
 
 

@@ -7,14 +7,16 @@
 Single-image **SMPL-X** estimation for ComfyUI — recover an expressive whole-body
 model from one photo, refine it in an interactive 3D editor, and export ControlNet
 maps or a mesh. Bring your own estimator: **NLF** (robust body), **Multi-HMR**
-(expressive whole-body), **WiLoR** (dedicated hands), and **SMIRK** (dedicated face).
+(expressive whole-body), **Multi-HMR2** (camera-centric multi-person, Anny→SMPL-X),
+**WiLoR** (dedicated hands), and **SMIRK** (dedicated face).
 
 
 ![](assets/figure1.jpg)
 
 ```
 Load SMPLx ─smplx_model─┬─► Load NLF ─model─► Body: NLF ─┐
-                        └─► Load Multi-HMR ─model─► Full Body: Multi-HMR ─┤
+                        ├─► Load Multi-HMR ─model─► Full Body: Multi-HMR ─┤
+                        └─► Load Multi-HMR2 ─model─► Full Body: Multi-HMR2 ─┤
 Load WiLoR ─model─► Hand: WiLoR ──(smplx_hands)──► Body: NLF               │
 Load SMIRK ─model─► Face: SMIRK ──(smplx_face)───► Body: NLF               │
                                                                          ▼
@@ -29,10 +31,12 @@ Load SMIRK ─model─► Face: SMIRK ──(smplx_face)───► Body: NLF  
 | **Load SMPLx** | Loads the SMPL-X body model (`local` folder or `huggingface`) → `smplx_model`. |
 | **Load NLF** | Loads the NLF estimator → `model`. |
 | **Load Multi-HMR** | Loads the Multi-HMR estimator → `model`. |
+| **Load Multi-HMR2** | Loads the Multi-HMR2 (Anny) estimator → `model`. Checkpoint auto-downloads from Naver. |
 | **Load WiLoR** | Loads the WiLoR hand model + detector → `model`. |
 | **Load SMIRK** | Loads the SMIRK expression encoder → `model`. |
 | **Body: NLF** | Robust single-image body → SMPL-X (neutral shape, flat hands). Optional `smplx_hands`, `smplx_face`. |
 | **Full Body: Multi-HMR** | One-pass expressive whole-body SMPL-X (body + hands + face). |
+| **Full Body: Multi-HMR2** | DETR-based multi-person detection + camera-centric mesh recovery (Anny model), bridged to SMPL-X via a registered-mesh fit (fitted betas + body + hands; largest person). Optional `smplx_hands`, `smplx_face`. |
 | **Hand: WiLoR** | In-the-wild hand reconstruction → SMPL-X hand pose (feeds `smplx_hands`). |
 | **Face: SMIRK** | Dedicated face expression capture → SMPL-X jaw + expression (feeds `smplx_face`). |
 | **SMPL-X Editor** | Interactive 3D editor: drag body/finger joints (IK), edit betas/expression, render `pose`/`depth`/`normal`/`canny` from the viewport. Outputs `mesh_data`. |
@@ -70,6 +74,7 @@ or fetch from a HuggingFace repo (`model_source = huggingface`, with an optional
 | **SMPL-X** *(required)* | `SMPLX_NEUTRAL.npz` (+ `MALE`/`FEMALE`) | `models/smplx/` | MPI — **registration** | [smpl-x.is.tue.mpg.de](https://smpl-x.is.tue.mpg.de/) |
 | **NLF** | `nlf_l_multi_0.3.2.torchscript` | `models/nlf/` | CC-BY-NC | [isarandi/nlf](https://github.com/isarandi/nlf/releases) |
 | **Multi-HMR** | `multiHMR_896_L.pt` | `models/multihmr/` | NAVER non-commercial | [naver/multi-hmr](https://github.com/naver/multi-hmr) (accept license) |
+| **Multi-HMR2** | `multihmr2.pt` | `models/multihmr2/` | NAVER non-commercial | auto-download from [naver/multi-hmr2](https://github.com/naver/multi-hmr2); Anny↔SMPL-X data fetched by `anny` (non-commercial) |
 | **WiLoR** | `wilor_final.ckpt`, `detector.pt` | `models/wilor/` | CC-BY-NC-ND | [WiLoR on HuggingFace](https://huggingface.co/spaces/rolpotamias/WiLoR) |
 | **MANO** *(for WiLoR)* | `MANO_LEFT.pkl`, `MANO_RIGHT.pkl` | `<node>/vendor/WiLoR/mano_data/` | MPI — **registration** | [mano.is.tue.mpg.de](https://mano.is.tue.mpg.de/) |
 | **SMIRK** | `SMIRK_em1.pt` | `models/smirk/` | MIT (code) · drives FLAME (non-commercial) | [georgeretsi/smirk](https://github.com/georgeretsi/smirk) |
@@ -82,7 +87,8 @@ or fetch from a HuggingFace repo (`model_source = huggingface`, with an optional
 1. Add **Load SMPLx** (defaults to `models/smplx/`). Connect its `smplx_model` output.
 2. Add an estimator loader + estimator:
    - **Load NLF → Body: NLF** for robust body/global pose (GPU-only), or
-   - **Load Multi-HMR → Full Body: Multi-HMR** for body + hands + expression in one pass (runs on CPU too).
+   - **Load Multi-HMR → Full Body: Multi-HMR** for body + hands + expression in one pass (runs on CPU too), or
+   - **Load Multi-HMR2 → Full Body: Multi-HMR2** for the newest camera-centric multi-person model (Anny → SMPL-X registered-mesh fit; fitted shape + body + hands, largest person in view). Checkpoint auto-downloads on first load.
 3. *(Optional, for sharp hands with NLF)* **Load WiLoR → Hand: WiLoR**, and wire its output into **Body: NLF**'s `smplx_hands`.
    *(Optional, for facial expression with NLF)* **Load SMIRK → Face: SMIRK** on a face crop, and wire its output into **Body: NLF**'s `smplx_face`.
 4. Feed the estimator's `smplx` into the **SMPL-X Editor**:
@@ -105,6 +111,7 @@ This package vendors third-party estimator source (cloned into `vendor/` by `ins
 third-party weights, each under its own license:
 
 - **Multi-HMR** — NAVER Corp. · CC BY-NC-SA 4.0 · [repo](https://github.com/naver/multi-hmr) · *Multi-HMR* (ECCV 2024)
+- **Multi-HMR 2** — NAVER Corp. · Naver license (non-commercial ckpt) · [repo](https://github.com/naver/multi-hmr2) · *Multi-HMR 2* (arXiv 2606.14841) · body model: [Anny](https://github.com/naver/anny) (Apache 2.0 code; SMPL-X topology data non-commercial)
 - **WiLoR** — Potamias et al. · CC BY-NC-ND 4.0 (no derivatives) · [repo](https://github.com/rolpotamias/WiLoR) · *WiLoR* (2024)
 - **NLF** — Sárándi & Pons-Moll · CC BY-NC 4.0 · [repo](https://github.com/isarandi/nlf) · *Neural Localizer Fields* (NeurIPS 2024)
 - **SMIRK** — Retsinas et al. · MIT code (drives non-commercial FLAME) · [repo](https://github.com/georgeretsi/smirk) · *SMIRK* (CVPR 2024)

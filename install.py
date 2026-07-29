@@ -9,6 +9,7 @@ _VENDOR = {
     "WiLoR": "https://github.com/rolpotamias/WiLoR.git",
     "multi-hmr": "https://github.com/naver/multi-hmr.git",
     "smirk": "https://github.com/georgeretsi/smirk.git",
+    "multi-hmr2": "https://github.com/naver/multi-hmr2.git",
 }
 
 
@@ -32,6 +33,7 @@ def _clone_vendor() -> None:
             subprocess.check_call(["git", "clone", "--depth", "1", url, str(dest)])
         except Exception as e:  # non-fatal: user can clone manually / set the env var
             env_var = {"WiLoR": "WILOR_DIR", "multi-hmr": "MULTIHMR_DIR",
+                       "multi-hmr2": "MULTIHMR2_DIR",
                        "smirk": "SMIRK_DIR"}.get(name, f"{name.upper()}_DIR")
             print(f"[install] WARNING: could not clone {name}: {e}\n"
                   f"          Clone it manually into {dest} or set the {env_var} env var.")

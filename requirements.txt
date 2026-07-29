@@ -9,6 +9,12 @@ huggingface_hub
 einops
 roma
 pillow
+# Multi-HMR2 estimator deps (source cloned by install.py into vendor/multi-hmr2)
+anny
+warp-lang
+scikit-learn
+torchmetrics
+termcolor
 # WiLoR hand estimator deps (source cloned by install.py into vendor/WiLoR)
 ultralytics
 yacs
