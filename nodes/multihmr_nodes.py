@@ -34,6 +34,11 @@ def _smplx_dict(params, gender, model_path):
     }
 
 
+"""
+很重要, SMPLX 输出
+"""
+
+
 class MultiHMREstimator:
     """One-pass expressive whole-body SMPL-X via a loaded Multi-HMR model."""
 
@@ -75,4 +80,7 @@ class MultiHMREstimator:
         smplx_dict["joints_3d"] = joints
         smplx_dict, verts = _ground(smplx_dict, verts)
         pose, _, _, _ = render_maps(verts, faces, dev, size=512, ground=False)
+        print("############################## SMPLX output")
+        for k, v in smplx_dict.items():
+            print(f"{k}: {v}")
         return {"ui": {}, "result": (smplx_dict, _img(pose))}
