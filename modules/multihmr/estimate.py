@@ -28,16 +28,16 @@ _PKG_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 # Multi-HMR source (model code). install.py clones it into vendor/multi-hmr;
 # override with the MULTIHMR_DIR env var.
 MULTIHMR_DIR = os.environ.get("MULTIHMR_DIR", os.path.join(_PKG_ROOT, "vendor", "multi-hmr"))
-DEFAULT_MULTIHMR_CKPT = "models/multihmr/multiHMR_896_L.pt"   # relative to ComfyUI CWD (fallback)
+DEFAULT_MULTIHMR_CKPT = "models/multihmr/multiHMR_896_L.pt"  # relative to ComfyUI CWD (fallback)
 # Small init placeholder shipped with the package (real means come from the checkpoint).
 _MEAN_PARAMS = os.environ.get("MULTIHMR_MEAN_PARAMS",
                               os.path.join(_PKG_ROOT, "assets", "smpl_mean_params.npz"))
 
-_RFIX = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], np.float32)   # OpenCV cam -> Y-up
+_RFIX = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], np.float32)  # OpenCV cam -> Y-up
 _cache: dict = {}
-_Model = None            # captured Multi-HMR Model class
-_normalize_rgb = None    # captured utils.image.normalize_rgb
-_get_focal = None        # captured utils.camera.get_focalLength_from_fieldOfView
+_Model = None  # captured Multi-HMR Model class
+_normalize_rgb = None  # captured utils.image.normalize_rgb
+_get_focal = None  # captured utils.camera.get_focalLength_from_fieldOfView
 
 
 def _ensure_render_stubs():
@@ -75,10 +75,11 @@ def _prepare_imports(smplx_parent):
     their own module globals alive via the bound references), then restore ComfyUI's
     entries so the rest of ComfyUI keeps working.
     """
+    print('_prepare_imports MULTIHMR_DIR:' + str(MULTIHMR_DIR))
     global _Model, _normalize_rgb, _get_focal
     if _Model is not None:
         return
-    _ensure_render_stubs()          # let vendor `import pyrender` succeed on fresh clones
+    _ensure_render_stubs()  # let vendor `import pyrender` succeed on fresh clones
     import importlib
 
     def _match(n):
@@ -92,9 +93,9 @@ def _prepare_imports(smplx_parent):
         _normalize_rgb = importlib.import_module("utils.image").normalize_rgb
         _get_focal = importlib.import_module("utils.camera").get_focalLength_from_fieldOfView
         sl = importlib.import_module("blocks.smpl_layer")
-        sl.SMPLX_DIR = smplx_parent                  # smplx.create(SMPLX_DIR,'smplx',...)
+        sl.SMPLX_DIR = smplx_parent  # smplx.create(SMPLX_DIR,'smplx',...)
         mh_model = importlib.import_module("model")
-        mh_model.MEAN_PARAMS = _MEAN_PARAMS          # np.load at Model init (buffers overwritten by ckpt)
+        mh_model.MEAN_PARAMS = _MEAN_PARAMS  # np.load at Model init (buffers overwritten by ckpt)
         _Model = mh_model.Model
     finally:
         try:
@@ -102,8 +103,8 @@ def _prepare_imports(smplx_parent):
         except ValueError:
             pass
         for n in [n for n in list(sys.modules) if _match(n)]:
-            del sys.modules[n]                       # drop Multi-HMR's entries
-        sys.modules.update(saved)                    # restore ComfyUI's
+            del sys.modules[n]  # drop Multi-HMR's entries
+        sys.modules.update(saved)  # restore ComfyUI's
 
 
 def load_multihmr(ckpt_path, smplx_parent, device):
@@ -117,6 +118,7 @@ def load_multihmr(ckpt_path, smplx_parent, device):
     key = (os.path.abspath(ckpt_path), device)
     if key in _cache:
         return _cache[key]
+    print('_prepare_imports smplx_parent' + str(smplx_parent))
     _prepare_imports(smplx_parent)
 
     # weights_only=False: the ckpt stores argparse.Namespace (trusted Naver source).
@@ -136,9 +138,9 @@ def _preprocess(image_rgb01, img_size, device):
     from PIL import Image, ImageOps
     arr = (np.clip(np.asarray(image_rgb01, np.float32), 0, 1) * 255).astype(np.uint8)
     pil = Image.fromarray(arr).convert("RGB")
-    pil = ImageOps.contain(pil, (img_size, img_size))      # keep aspect
-    pil = ImageOps.pad(pil, size=(img_size, img_size))     # pad to square (zeros)
-    x = _normalize_rgb(np.asarray(pil))                    # (3,S,S) float, ImageNet norm
+    pil = ImageOps.contain(pil, (img_size, img_size))  # keep aspect
+    pil = ImageOps.pad(pil, size=(img_size, img_size))  # pad to square (zeros)
+    x = _normalize_rgb(np.asarray(pil))  # (3,S,S) float, ImageNet norm
     return torch.from_numpy(x).unsqueeze(0).to(device)
 
 
@@ -153,7 +155,7 @@ def _camera(img_size, device, fov=60.0):
 def _split_pose(rotvec):
     """rotvec [53,3] -> SMPL-X param vectors (numpy float32)."""
     import cv2
-    g, _ = cv2.Rodrigues(_RFIX @ cv2.Rodrigues(rotvec[0])[0])   # global_orient into Y-up
+    g, _ = cv2.Rodrigues(_RFIX @ cv2.Rodrigues(rotvec[0])[0])  # global_orient into Y-up
     return {
         "global_orient": g.reshape(3).astype(np.float32),
         "body_pose": rotvec[1:22].reshape(63).astype(np.float32).copy(),
@@ -172,7 +174,7 @@ def estimate_smplx_params(model, img_size, image_rgb01, device, det_thresh=0.3):
     """Run Multi-HMR; return full SMPL-X params for the most prominent person."""
     x = _preprocess(image_rgb01, img_size, device)
     K = _camera(img_size, device)
-    use_amp = str(device).startswith("cuda")                 # fp16 like the demo (saves memory)
+    use_amp = str(device).startswith("cuda")  # fp16 like the demo (saves memory)
     with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
         humans = model(x, is_training=False, nms_kernel_size=1,
                        det_thresh=float(det_thresh), K=K)
@@ -182,9 +184,10 @@ def estimate_smplx_params(model, img_size, image_rgb01, device, det_thresh=0.3):
     def _extent(h):
         j = h["j2d"].detach().cpu().numpy()
         return float(j[:, 1].max() - j[:, 1].min())
-    h = max(humans, key=_extent)                            # most prominent person
 
-    rot = h["rotvec"].detach().cpu().numpy().astype(np.float32)      # [53,3]
+    h = max(humans, key=_extent)  # most prominent person
+
+    rot = h["rotvec"].detach().cpu().numpy().astype(np.float32)  # [53,3]
     transl = h["transl"].detach().cpu().numpy().astype(np.float32).reshape(3)
     out = _split_pose(rot)
     out["betas"] = _fit10(h["shape"].detach().cpu().numpy())

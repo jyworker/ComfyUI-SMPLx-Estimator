@@ -158,6 +158,7 @@ def _smplx_payload(smplx_dict, limbs, vertices=None, faces=None, skin=None,
             "indices": skin["indices"].tolist(),
             "weights": np.round(skin["weights"], 4).tolist(),
         }
+    print('_smplx_payload'+str(_smplx_payload))
     return json.dumps(data)
 
 
